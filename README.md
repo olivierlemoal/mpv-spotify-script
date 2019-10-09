@@ -1,0 +1,1 @@
+# mpv-spotify-script
