@@ -1,0 +1,217 @@
+#! /usr/bin/env python3
+
+import sys
+import os
+import json
+import base64
+import logging
+import requests
+import webbrowser
+from queue import Queue
+from threading import Thread
+from pathlib import Path
+from flask import Flask, request, after_this_request
+
+########################
+# Config
+########################
+
+# Create an app on https://developer.spotify.com/dashboard/
+# Configure CLIENT_ID / SECRET_ID in spotify_helper
+# Configure callback to http://localhost:{PORT_CALLBACK}/callback on Spotify dashboard
+
+CLIENT_ID = ""
+SECRET_ID = ""
+PORT_CALLBACK = 45678
+
+
+########################
+# API callback handler Webserver Thread
+########################
+
+app = Flask(__name__)
+
+
+@app.route('/callback')
+def index():
+    code = request.args.get('code')
+    if not code:
+        return '<b>Spotify Helper: error during authentication.</b>'
+        sys.exit(-1)
+
+    @after_this_request
+    def after_request(response):
+        tokens = api_get_token(code)
+        utils_save_token(tokens)
+        q.put(tokens)
+        return response
+    return '<b>Spotify Helper: successfully connected to Spotify.</b>'
+
+
+def flaskThread():
+    # Disable Flask logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
+    app.debug = False
+    # Disable Flask starting message to stdout
+    os.environ["WERKZEUG_RUN_MAIN"] = "true"
+    app.run(host='127.0.0.1', port=PORT_CALLBACK)
+
+
+q = Queue()
+thread = Thread(target=flaskThread, args=())
+thread.setDaemon(True)
+thread.start()
+
+
+########################
+# Utils
+########################
+
+
+def utils_save_token(tokens):
+    savefile = open(str(Path.home()) + '/.config/spotify_helper', 'w+')
+    json.dump(tokens, savefile)
+
+
+def utils_get_new_token():
+    webbrowser.open("https://accounts.spotify.com/authorize?client_id={}&response_type=code&redirect_uri=http://localhost:{}/callback&scope=playlist-modify-private,playlist-modify-public&state=34fFs29kd09".format(CLIENT_ID, PORT_CALLBACK))
+    tokens = q.get()
+    return tokens
+
+
+def utils_load_token():
+    try:
+        savefile = open(str(Path.home()) + '/.config/spotify_helper', 'r')
+        tokens = json.load(savefile)
+    except FileNotFoundError:
+        tokens = utils_get_new_token()
+    return tokens
+
+
+def utils_refresh_token():
+    if "refresh_token" in tokens.keys():
+        new_tokens = api_refresh_token(tokens["refresh_token"])
+    else:
+        new_tokens = utils_get_new_token()
+    utils_save_token(new_tokens)
+    return new_tokens
+
+
+def utils_craft_header(tokens):
+    headers = {
+        "Authorization": "Bearer {}".format(tokens["access_token"]),
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    return headers
+
+
+########################
+# Custom Exception
+########################
+
+class TokenException(Exception):
+    # Create new token when raised
+
+    def __init__(self, request):
+        super().__init__(request.text)
+        self.new_tokens = utils_refresh_token()
+
+
+########################
+# Spotify API
+########################
+
+def api_get_token(code):
+    digest = base64.b64encode("{}:{}".format(CLIENT_ID, SECRET_ID).encode("ascii")).decode("ascii")
+    reqHeaders = {"Authorization": "Basic {}".format(digest)}
+    r = requests.post("https://accounts.spotify.com/api/token", data={"grant_type": "authorization_code", "code": code, "redirect_uri": "http://localhost:{}/callback".format(PORT_CALLBACK)}, headers=reqHeaders)
+    refresh_token = r.json()["refresh_token"]
+    access_token = r.json()["access_token"]
+    tokens = {"access_token": access_token, "refresh_token": refresh_token}
+    return tokens
+
+
+def api_refresh_token(refresh_token):
+    digest = base64.b64encode("{}:{}".format(CLIENT_ID, SECRET_ID).encode("ascii")).decode("ascii")
+    reqHeaders = {"Authorization": "Basic {}".format(digest)}
+    r = requests.post("https://accounts.spotify.com/api/token", data={"grant_type": "refresh_token", "refresh_token": refresh_token}, headers=reqHeaders)
+    access_token = r.json()["access_token"]
+    tokens = {"access_token": access_token}
+    return tokens
+
+
+def api_search_song(songname):
+    api_req = "search?q={}&type=track&limit=1".format(songname)
+    req = requests.get("https://api.spotify.com/v1/" + api_req, headers=headers)
+    if not req.ok:
+        raise TokenException(req)
+    first_track = {}
+    try:
+        # caveat, only first artist
+        first_track['artist'] = req.json()['tracks']['items'][0]['artists'][0]['name']
+        first_track['name'] = req.json()['tracks']['items'][0]['name']
+        first_track['uri'] = req.json()['tracks']['items'][0]['uri']
+    except IndexError:
+        return None
+    return first_track
+
+
+def api_add_song_playlist(uri, playlist_id):
+    req = requests.post("https://api.spotify.com/v1/playlists/{}/tracks".format(playlist_id), json={"uris": [uri]}, headers=headers)
+    if not req.ok:
+        raise TokenException(req)
+    return req.ok
+
+
+########################
+# Main
+########################
+
+def usage():
+    print("""Spotify helper, will add songname to playlist :
+        ./{} playlist_id song
+
+Return code:
+ 0 All good
+ 1 Helper error
+ 2 Can't find song
+ -1 Wrong number of args
+
+""".format(sys.argv[0]))
+
+
+if __name__ == "__main__":
+
+    if len(sys.argv) < 3:
+        usage()
+        sys.exit(-1)
+
+    playlist_id = sys.argv[1]
+    if "spotify:playlist:" in playlist_id:
+        playlist_id = playlist_id.split(":")[-1]
+    songname = sys.argv[2]
+
+    tokens = utils_load_token()
+
+    retry = True
+    while retry:
+        retry = False
+        headers = utils_craft_header(tokens)
+        try:
+            first_match = api_search_song(songname)
+            if not first_match:
+                sys.exit(2)
+            res = api_add_song_playlist(first_match['uri'], playlist_id)
+            if not res:
+                sys.exit(1)
+            sys.stdout.write(first_match['artist'] + " - " + first_match['name'])
+            sys.stdout.flush()
+            sys.exit(0)
+        except TokenException as e:
+            tokens = e.new_tokens
+            retry = True
+        except Exception as e:
+            raise e
+            sys.exit(1)
