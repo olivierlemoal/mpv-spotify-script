@@ -2,6 +2,8 @@
 
 ![example](/readme.png)
 
+If your radio does not broadcast title, you can use this script along with [mpv-radio-title-script](https://github.com/olivierlemoal/mpv-radio-title-script/).
+
 ## Usage
 
 Press P to add current title to your Spotify playlist.
