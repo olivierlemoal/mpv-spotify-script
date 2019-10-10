@@ -1,5 +1,9 @@
 # mpv-spotify-script
 
+
+This script add current playing title in MPV to a user-defined Spotify playlist.
+You can use it pressing P keybinding, or use autosave feature.
+
 ![example](/readme.png)
 
 If your radio does not broadcast title, you can use this script along with [mpv-radio-title-script](https://github.com/olivierlemoal/mpv-radio-title-script/).
