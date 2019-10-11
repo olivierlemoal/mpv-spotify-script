@@ -1,4 +1,4 @@
-# mpv-spotify-script
+# mpv Spotify
 
 
 This script add current playing title in MPV to a user-defined Spotify playlist.
