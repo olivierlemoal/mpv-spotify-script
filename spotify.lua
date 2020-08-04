@@ -5,7 +5,7 @@
 ]]--
 
 local settings = {
-    spotify_helper_path = "/usr/local/bin/spotify_helper", -- Path to Spotify Helper
+    spotify_helper_path = "spotify_helper", -- Path to Spotify Helper
     playlist_id = "spotify:playlist:0OlQjdqrHIJq7cOED2Qm7H", -- Right click on playlist > Share > Copy Spotify URI
     autosave = false, -- Autosave to Spotify when title is changing
 }
