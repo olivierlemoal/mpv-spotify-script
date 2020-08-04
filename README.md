@@ -18,7 +18,7 @@ Edit `spotify.lua`
 
 ```lua
 local settings = {
-    spotify_helper_path = "/usr/local/bin/spotify_helper", -- Path to Spotify Helper
+    spotify_helper_path = "spotify_helper", -- Path to Spotify Helper
     playlist_id = "spotify:playlist:0OlQjrqrHIJq7cOED2Qm7H", -- Right click on playlist > Share > Copy Spotify URI
     autosave = false, -- Autosave to Spotify when title is changing
 }
@@ -40,6 +40,7 @@ PORT_CALLBACK = 45678
 
 ```bash
 git clone https://github.com/olivierlemoal/mpv-spotify-script
+# Move helper somewhere in your $PATH
 mv mpv-spotify-script/spotify_helper /usr/local/bin/
 mv mpv-spotify-script/spotify.lua ~/.config/mpv/script
 python3 -m pip install --user -r mpv-spotify-script/requirements.txt
