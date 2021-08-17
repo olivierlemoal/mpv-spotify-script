@@ -192,6 +192,7 @@ if __name__ == "__main__":
     if "spotify:playlist:" in playlist_id:
         playlist_id = playlist_id.split(":")[-1]
     songname = sys.argv[2]
+    songname = songname.replace("-", " ")
 
     tokens = utils_load_token()
 
