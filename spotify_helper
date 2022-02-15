@@ -59,8 +59,7 @@ def flaskThread():
 
 
 q = Queue()
-thread = Thread(target=flaskThread, args=())
-thread.setDaemon(True)
+thread = Thread(target=flaskThread, daemon=True, args=())
 thread.start()
 
 
